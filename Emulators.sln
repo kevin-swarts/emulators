@@ -7,7 +7,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Emulators.MOS6502", "src\Em
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "6502", "6502", "{C9CC20EC-ADD7-488F-B43E-993D8A37074B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Emulators.MOS6502Tests", "src\Emulators.MOS6502Tests\Emulators.MOS6502Tests.csproj", "{21DB6DD1-8C08-45AF-AC44-DDBA93226442}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Emulators.MOS6502Tests", "src\Emulators.MOS6502Tests\Emulators.MOS6502Tests.csproj", "{21DB6DD1-8C08-45AF-AC44-DDBA93226442}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{BF6F301A-2239-4388-8CA0-1D30CEEB2F16}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,6 +34,7 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{9B02C14B-AA74-4E7C-AB03-B0BFE6B8F9D9} = {C9CC20EC-ADD7-488F-B43E-993D8A37074B}
+		{21DB6DD1-8C08-45AF-AC44-DDBA93226442} = {C9CC20EC-ADD7-488F-B43E-993D8A37074B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F39DAC0E-5BFC-408E-9B88-ED233C159940}

@@ -1,30 +1,85 @@
 ﻿using System;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Emulators.MOS6502
 {
-    public class CPU
+    public class CPU : IDisposable
     {
+        /// <summary>
+        /// Represents the CPU's only thread.
+        /// </summary>
+        private Task<bool> _thread;
+
+        /// <summary>
+        /// Determines if the CPU is in debug mode
+        /// </summary>
+        private bool _debug = false;
+
+        /// <summary>
+        /// The cancellation token used to control the thread task
+        /// </summary>
+        private CancellationTokenSource _threadCancellationTokenSource;
+        private CancellationToken _threadCancellationToken;
+
+        /// <summary>
+        /// Program Counter
+        /// </summary>
         public ushort PC { get; set; }
+
+        /// <summary>
+        /// Stack Pointer
+        /// </summary>
         public ushort SP { get; set; }
+
+        /// <summary>
+        /// Accumulator
+        /// </summary>
         public byte A { get; set; }
+
+        /// <summary>
+        /// X Register
+        /// </summary>
         public byte X { get; set; }
+
+        /// <summary>
+        /// Y Register
+        /// </summary>
         public byte Y { get; set; }
+
+        /// <summary>
+        /// Processor Status Flags (7 used bit byte)
+        /// </summary>
         public ProcessorStatus Status { get; set; }
+
+        /// <summary>
+        /// The frequency in MHz of the CPU
+        /// </summary>
         public float Frequency { get; set; }
+
+        /// <summary>
+        /// The memory map
+        /// </summary>
         public byte[] Memory { get; private set; }
+
+        /// <summary>
+        /// The maximum amount of memory the process can address
+        /// </summary>
         public long MemoryLimit { get; set; } = 0xFFFF;
 
+        public bool IsPaused { get; private set; }
 
         public CPU(long memoryLimit = 0xFFFF, float frequency = 1.023F)
         {
             MemoryLimit = memoryLimit;
+            PC = 0x100; // 255
         }
 
         public void Reset()
         {
-            PC = 0x00;
-            SP = 0x100; // 256
+            PC = 0x100; // 255
+            SP = 0x00;
             A = 0x00;
             X = 0x00;
             Y = 0x00;
@@ -34,8 +89,12 @@ namespace Emulators.MOS6502
 
         public void Reset(byte[] memory)
         {
-            PC = 0x100;
-            SP = 0x00; // 256
+            if (_thread != null)
+            {
+                _thread.Dispose();
+            }
+            PC = 0x100; // 255
+            SP = 0x00;
             A = 0x00;
             X = 0x00;
             Y = 0x00;
@@ -48,7 +107,40 @@ namespace Emulators.MOS6502
             }
 
             Memory = memory;
-            this.execute();
+            _threadCancellationTokenSource = new CancellationTokenSource();
+            _threadCancellationToken = _threadCancellationTokenSource.Token;
+            _thread = new Task<bool>(() =>
+            {
+                while (!_threadCancellationToken.IsCancellationRequested)
+                {
+                    this.execute();
+                    while (_debug)
+                    {
+                        if (!_threadCancellationToken.IsCancellationRequested)
+                        {
+                            this.IsPaused = true;
+                            Task.Delay(100, _threadCancellationToken);
+                        }
+                        else
+                        {
+                            _debug = false;
+                            IsPaused = false;
+                            return false;
+                        }
+                    }
+
+                    this.IsPaused = false;
+                }
+
+                return false;
+            }, _threadCancellationToken);
+
+            _thread.Start();
+        }
+
+        public void Debug()
+        {
+            this._debug = !_debug;
         }
 
         private void execute()
@@ -61,6 +153,8 @@ namespace Emulators.MOS6502
                     loadAccumulatorImmediate();
                     break;
                 case InstructionSet.INS_LDA_ZP:
+                    loadAccumulatorZeroPage();
+                    break;
                 case InstructionSet.INS_LDA_ZPX:
                 case InstructionSet.INS_LDA_A:
                 case InstructionSet.INS_LDA_AX:
@@ -102,10 +196,30 @@ namespace Emulators.MOS6502
             return fetchByte(PC++);
         }
 
+        private void loadAccumulatorStatus()
+        {
+            Status.Zero = this.A == (byte)0x00;
+        }
+
         private void loadAccumulatorImmediate()
         {
             A = fetchByte();
-            Status.Zero = this.A == (byte)0x00;
+            loadAccumulatorStatus();
+        }
+
+        private void loadAccumulatorZeroPage()
+        {
+            A = fetchByte(fetchByte());
+            loadAccumulatorStatus();
+        }
+
+        public void Dispose()
+        {
+            _threadCancellationTokenSource.Cancel();
+            _thread.Wait();
+            _thread.Dispose();
+            Memory = null;
+            Status = null;
         }
     }
 }
