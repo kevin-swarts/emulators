@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +12,7 @@ namespace Emulators.MOS6502
         /// <summary>
         /// Represents the CPU's only thread.
         /// </summary>
-        private Task<bool> _thread;
+        private Task _thread;
 
         /// <summary>
         /// Determines if the CPU is in debug mode
@@ -68,23 +70,28 @@ namespace Emulators.MOS6502
         /// </summary>
         public long MemoryLimit { get; set; } = 0xFFFF;
 
+        /// <summary>
+        /// Determines is the CPU is currently paused as Reset cannot guanantee instant pausing
+        /// </summary>
         public bool IsPaused { get; private set; }
 
-        public CPU(long memoryLimit = 0xFFFF, float frequency = 1.023F)
+        public float CalculationsPerMilisecond { get; set; }
+
+        public CPU(long memoryLimit = 0, float frequency = 1.023F)
         {
+            if (memoryLimit == 0)
+            {
+                memoryLimit = ushort.MaxValue;
+            }
+
             MemoryLimit = memoryLimit;
-            PC = 0x100; // 255
+            Frequency = frequency;
+            PC = 0x100; // 256
         }
 
         public void Reset()
         {
-            PC = 0x100; // 255
-            SP = 0x00;
-            A = 0x00;
-            X = 0x00;
-            Y = 0x00;
-            Status = new ProcessorStatus();
-            Memory = new byte[MemoryLimit];
+            Reset(new byte[MemoryLimit]);
         }
 
         public void Reset(byte[] memory)
@@ -93,46 +100,75 @@ namespace Emulators.MOS6502
             {
                 _thread.Dispose();
             }
-            PC = 0x100; // 255
+            PC = 0x100; // 256
             SP = 0x00;
             A = 0x00;
             X = 0x00;
             Y = 0x00;
             Status = new ProcessorStatus();
 
+            if (memory.Length < MemoryLimit - 255)
+            {
+                // Start by padding the zero page memory at the beginning
+                var zeroPage = new byte[256];
+                memory = zeroPage.Concat(memory).ToArray();
+            }
+
+            if (memory.Length < MemoryLimit)
+            {
+                memory = memory.Concat(new byte[MemoryLimit - memory.Length]).ToArray();
+            }
+
             // Pad the memory passed in to fill the memory to MaxLimit
-            for(var i = memory.Length; i < MemoryLimit; i++)
+            for (var i = memory.Length; i < MemoryLimit; i++)
             {
                 memory[i] = 0x00;
             }
 
             Memory = memory;
+        }
+
+        public void Start()
+        {
             _threadCancellationTokenSource = new CancellationTokenSource();
             _threadCancellationToken = _threadCancellationTokenSource.Token;
-            _thread = new Task<bool>(() =>
+            _thread = new Task(async () =>
             {
+                var stopWatch = new Stopwatch();
                 while (!_threadCancellationToken.IsCancellationRequested)
                 {
+                    stopWatch.Restart();
                     this.execute();
+
                     while (_debug)
                     {
                         if (!_threadCancellationToken.IsCancellationRequested)
                         {
                             this.IsPaused = true;
-                            Task.Delay(100, _threadCancellationToken);
+                            await Task.Delay(1);
                         }
                         else
                         {
                             _debug = false;
                             IsPaused = false;
-                            return false;
+                            return;
                         }
                     }
 
-                    this.IsPaused = false;
+                    stopWatch.Stop();
+                    float initElapsed = 0;
+                    while (initElapsed + stopWatch.ElapsedTicks < Frequency * 1000)
+                    {
+                        initElapsed += stopWatch.ElapsedTicks + 1;
+                        stopWatch.Reset();
+                        await Task.Delay(0);
+                        stopWatch.Stop();
+                    }
+
+                    CalculationsPerMilisecond = stopWatch.ElapsedTicks + initElapsed;
                 }
 
-                return false;
+                return;
             }, _threadCancellationToken);
 
             _thread.Start();
@@ -145,8 +181,15 @@ namespace Emulators.MOS6502
 
         private void execute()
         {
-            var instruction = Memory[PC];
-            PC++;
+#if DEBUG
+            // This should only be used while testing as the PC should never wrap
+            if (ushort.MaxValue == PC + 1)
+            {
+                PC = 0;
+            }
+#endif
+            var instruction = Memory[PC++];
+
             switch (instruction)
             {
                 case InstructionSet.INS_LDA_I:
@@ -156,7 +199,11 @@ namespace Emulators.MOS6502
                     loadAccumulatorZeroPage();
                     break;
                 case InstructionSet.INS_LDA_ZPX:
+                    loadAccumulatorZeroPageXOffset();
+                    break;
                 case InstructionSet.INS_LDA_A:
+                    loadAccumulatorAbsolute();
+                    break;
                 case InstructionSet.INS_LDA_AX:
                 case InstructionSet.INS_LDA_AY:
                 case InstructionSet.INS_LDA_IX:
@@ -166,14 +213,10 @@ namespace Emulators.MOS6502
             }
         }
 
-        private ushort fetchWord(ushort address)
+        private byte fetchWord(ushort address)
         {
-            //if (BitConverter.IsLittleEndian)
-            //{
-                var newByte = new byte[2];
-                return BitConverter.ToUInt16(Memory, address);
-            //}
-            
+            PC++;
+            return Memory[address];
         }
 
         /// <summary>
@@ -183,7 +226,28 @@ namespace Emulators.MOS6502
         /// <returns>The byte in the requested address</returns>
         private byte fetchByte(ushort address)
         {
+            PC++;
             return Memory[address];
+        }
+
+        /// <summary>
+        /// Retrieve the X register and increment PC
+        /// </summary>
+        /// <returns>The current X register</returns>
+        private byte fetchX()
+        {
+            PC++;
+            return X;
+        }
+
+        /// <summary>
+        /// Retrieve the Y register and increment PC
+        /// </summary>
+        /// <returns>The current Y register</returns>
+        private byte fetchY()
+        {
+            PC++;
+            return Y;
         }
 
 
@@ -193,7 +257,7 @@ namespace Emulators.MOS6502
         /// <returns>The next byte in memory</returns>
         private byte fetchByte()
         {
-            return fetchByte(PC++);
+            return fetchByte(PC);
         }
 
         private void loadAccumulatorStatus()
@@ -213,13 +277,30 @@ namespace Emulators.MOS6502
             loadAccumulatorStatus();
         }
 
+        private void loadAccumulatorZeroPageXOffset()
+        {
+            A = fetchByte(Convert.ToByte(fetchByte() + fetchX()));
+            loadAccumulatorStatus();
+        }
+
+        private void loadAccumulatorAbsolute()
+        {
+            var byteA = fetchByte();
+            var byteB = fetchByte();
+            A = fetchByte((ushort)(byteB << 8 | byteA));
+            loadAccumulatorStatus();
+        }
+
         public void Dispose()
         {
-            _threadCancellationTokenSource.Cancel();
-            _thread.Wait();
-            _thread.Dispose();
-            Memory = null;
-            Status = null;
+            if (_threadCancellationTokenSource != null)
+            {
+                _threadCancellationTokenSource.Cancel();
+                _thread.Wait();
+                _thread.Dispose();
+                Memory = null;
+                Status = null;
+            }
         }
     }
 }
