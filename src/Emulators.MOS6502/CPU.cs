@@ -27,31 +27,36 @@ namespace Emulators.MOS6502
         /// </summary>
         private CancellationTokenSource _threadCancellationTokenSource;
         private CancellationToken _threadCancellationToken;
+        private byte _a;
+        private byte _x;
+        private byte _y;
+        private ushort _pc;
+        private ushort _sp;
 
         /// <summary>
         /// Program Counter
         /// </summary>
-        public ushort PC { get; set; }
+        public ushort PC { get => _pc; set => _pc = value; }
 
         /// <summary>
         /// Stack Pointer
         /// </summary>
-        public ushort SP { get; set; }
+        public ushort SP { get => _sp; set => _sp = value; }
 
         /// <summary>
         /// Accumulator
         /// </summary>
-        public byte A { get; set; }
+        public byte A { get => _a; set => _a = value; }
 
         /// <summary>
         /// X Register
         /// </summary>
-        public byte X { get; set; }
+        public byte X { get => _x; set => _x = value; }
 
         /// <summary>
         /// Y Register
         /// </summary>
-        public byte Y { get; set; }
+        public byte Y { get => _y; set => _y = value; }
 
         /// <summary>
         /// Processor Status Flags (7 used bit byte)
@@ -202,22 +207,22 @@ namespace Emulators.MOS6502
             switch (instruction)
             {
                 case InstructionSet.INS_LDA_I:
-                    loadRegisterImmediate(reg => A = reg);
+                    loadRegisterImmediate(ref _a);
                     break;
                 case InstructionSet.INS_LDA_ZP:
-                    loadRegisterZeroPage(reg => A = reg);
+                    loadRegisterZeroPage(ref _a);
                     break;
                 case InstructionSet.INS_LDA_ZPX:
-                    loadRegisterZeroPageOffset(X, reg => A = reg);
+                    loadRegisterZeroPageOffset(X, ref _a);
                     break;
                 case InstructionSet.INS_LDA_A:
-                    loadRegisterAbsolute(reg => A = reg);
+                    loadRegisterAbsolute(ref _a);
                     break;
                 case InstructionSet.INS_LDA_AX:
-                    loadRegisterAbsoluteOffset(X, reg => A = reg);
+                    loadRegisterAbsoluteOffset(X, ref _a);
                     break;
                 case InstructionSet.INS_LDA_AY:
-                    loadRegisterAbsoluteOffset(Y, reg => A = reg);
+                    loadRegisterAbsoluteOffset(Y, ref _a);
                     break;
                 case InstructionSet.INS_LDA_IX:
                 case InstructionSet.INS_LDA_IY:
@@ -318,9 +323,9 @@ namespace Emulators.MOS6502
         /// Load the next byte into the register
         /// </summary>
         /// <param name="action">The action that will take the value and apply it to the correct register</param>
-        private void loadRegisterImmediate(Action<byte> action)
+        private void loadRegisterImmediate(ref byte register)
         {
-            action(fetchNextByte());
+            register = fetchNextByte();
             loadAccumulatorStatus();
         }
 
@@ -328,9 +333,9 @@ namespace Emulators.MOS6502
         /// Load the value at the position in zero page memory < 256 bytes ino the correct register
         /// </summary>
         /// <param name="action">The action that will take the value and apply it to the correct register</param>
-        private void loadRegisterZeroPage(Action<byte> action)
+        private void loadRegisterZeroPage(ref byte register)
         {
-            action(fetchByte(fetchNextByte()));
+            register = fetchByte(fetchNextByte());
             loadAccumulatorStatus();
         }
 
@@ -339,24 +344,24 @@ namespace Emulators.MOS6502
         /// </summary>
         /// <param name="offset">The amount to offset from the zero page address</param>
         /// <param name="action">The action that will take the value and apply it to the correct register</param>
-        private void loadRegisterZeroPageOffset(byte offset, Action<byte> action)
+        private void loadRegisterZeroPageOffset(byte offset, ref byte register)
         {
-            action(fetchByte(Convert.ToByte(fetchNextByte() + fetchRegister(offset))));
+            register = fetchByte(Convert.ToByte(fetchNextByte() + fetchRegister(offset)));
             loadAccumulatorStatus();
         }
 
-        private void loadRegisterAbsolute(Action<byte> action)
+        private void loadRegisterAbsolute(ref byte register)
         {
             var address = fetchNextWord();
-            action(fetchByte(address));
+            register = fetchByte(address);
             loadAccumulatorStatus();
         }
 
-        private void loadRegisterAbsoluteOffset(byte offset, Action<byte> action)
+        private void loadRegisterAbsoluteOffset(byte offset, ref byte register)
         {
             var address = fetchNextWord();
             var value = fetchByte(Convert.ToUInt16(address + offset));
-            action(value);
+            register = value;
             loadAccumulatorStatus();
             //var byteA = fetchNextByte();
             //var byteB = fetchNextByte();
