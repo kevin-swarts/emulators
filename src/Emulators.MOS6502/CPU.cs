@@ -298,9 +298,15 @@ namespace Emulators.MOS6502
         private ushort fetchNextWord()
         {
             _cycles++;
-            var byteA = Memory[PC++];
-            var byteB = Memory[PC++];
-            return swapBytes(byteA, byteB);
+#if BIGENDIAN
+                var byteA = Memory[PC++];
+                var byteB = Memory[PC++];
+                return swapBytes(byteA, byteB);
+#else
+            var value = BitConverter.ToUInt16(Memory, PC++);
+            PC++;
+            return value;
+#endif
         }
 
         /// <summary>
