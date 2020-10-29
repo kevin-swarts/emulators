@@ -1,10 +1,14 @@
 ﻿using System;
+using System.Collections;
 using System.Diagnostics;
+using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Security.Authentication.ExtendedProtection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
+using Word = System.UInt16;
+using Bit = System.Boolean;
 
 namespace Emulators.MOS6502
 {
@@ -18,48 +22,48 @@ namespace Emulators.MOS6502
         /// <summary>
         /// Determines if the CPU is in debug mode
         /// </summary>
-        private bool _debug = false;
+        private Bit _debug = false;
 
-        private byte _cycles = 0;
+        private Byte _cycles = 0;
 
         /// <summary>
         /// The cancellation token used to control the thread task
         /// </summary>
         private CancellationTokenSource _threadCancellationTokenSource;
         private CancellationToken _threadCancellationToken;
-        private byte _a;
-        private byte _x;
-        private byte _y;
-        private ushort _pc;
-        private ushort _sp;
+        private Byte _a;
+        private Byte _x;
+        private Byte _y;
+        private Word _pc;
+        private Word _sp;
 
         /// <summary>
         /// Program Counter
         /// </summary>
-        public ushort PC { get => _pc; set => _pc = value; }
+        public Word PC { get => _pc; set => _pc = value; }
 
         /// <summary>
         /// Stack Pointer
         /// </summary>
-        public ushort SP { get => _sp; set => _sp = value; }
+        public Word SP { get => _sp; set => _sp = value; }
 
         /// <summary>
         /// Accumulator
         /// </summary>
-        public byte A { get => _a; set => _a = value; }
+        public Byte A { get => _a; set => _a = value; }
 
         /// <summary>
         /// X Register
         /// </summary>
-        public byte X { get => _x; set => _x = value; }
+        public Byte X { get => _x; set => _x = value; }
 
         /// <summary>
         /// Y Register
         /// </summary>
-        public byte Y { get => _y; set => _y = value; }
+        public Byte Y { get => _y; set => _y = value; }
 
         /// <summary>
-        /// Processor Status Flags (7 used bit byte)
+        /// Processor Status Flags (7 used bit Byte)
         /// </summary>
         public ProcessorStatus Status { get; set; }
 
@@ -71,7 +75,8 @@ namespace Emulators.MOS6502
         /// <summary>
         /// The memory map
         /// </summary>
-        public byte[] Memory { get; private set; }
+        public Byte[] Memory { get; private set; }
+        public BitArray MemoryMap { get; set; }
 
         /// <summary>
         /// The maximum amount of memory the process can address
@@ -81,30 +86,30 @@ namespace Emulators.MOS6502
         /// <summary>
         /// Determines is the CPU is currently paused as Reset cannot guanantee instant pausing
         /// </summary>
-        public bool IsPaused { get; private set; }
+        public Bit IsPaused { get; private set; }
 
         public float CalculationsPerMilisecond { get; set; }
 
-        public byte Cycles { get { return _cycles; } private set { _cycles = value; } }
+        public Byte Cycles { get { return _cycles; } private set { _cycles = value; } }
 
         public CPU(long memoryLimit = 0, float frequency = 1.023F)
         {
             if (memoryLimit == 0)
             {
-                memoryLimit = ushort.MaxValue;
+                memoryLimit = Word.MaxValue;
             }
 
             MemoryLimit = memoryLimit;
             Frequency = frequency;
-            PC = 0x100; // 256
+            _pc = 0x100; // 256
         }
 
         public void Reset()
         {
-            Reset(new byte[MemoryLimit]);
+            Reset(new Byte[MemoryLimit]);
         }
 
-        public void Reset(byte[] memory)
+        public void Reset(Byte[] memory)
         {
             if (_thread != null)
             {
@@ -113,7 +118,7 @@ namespace Emulators.MOS6502
 
             _cycles = 0;
 
-            PC = 0x100; // 256
+            _pc = 0x100; // 256
             SP = 0x00;
             A = 0x00;
             X = 0x00;
@@ -123,13 +128,13 @@ namespace Emulators.MOS6502
             if (memory.Length < MemoryLimit - 255)
             {
                 // Start by padding the zero page memory at the beginning
-                var zeroPage = new byte[256];
+                var zeroPage = new Byte[256];
                 memory = zeroPage.Concat(memory).ToArray();
             }
 
             if (memory.Length < MemoryLimit)
             {
-                memory = memory.Concat(new byte[MemoryLimit - memory.Length]).ToArray();
+                memory = memory.Concat(new Byte[MemoryLimit - memory.Length]).ToArray();
             }
 
             // Pad the memory passed in to fill the memory to MaxLimit
@@ -197,9 +202,9 @@ namespace Emulators.MOS6502
             _cycles = 0;
 #if DEBUG
             // This should only be used while testing as the PC should never wrap
-            if (ushort.MaxValue == PC + 1)
+            if (Word.MaxValue == _pc + 1)
             {
-                PC = 0;
+                _pc = 0;
             }
 #endif
             var instruction = fetchNextByte();
@@ -231,18 +236,18 @@ namespace Emulators.MOS6502
             }
         }
 
-        private byte fetchWord(ushort address)
+        private Byte fetchWord(Word address)
         {
-            PC++;
+            _pc++;
             return Memory[address];
         }
 
         /// <summary>
-        /// Returns the byte at the address requested
+        /// Returns the Byte at the address requested
         /// </summary>
         /// <param name="address">The location in memory</param>
-        /// <returns>The byte in the requested address</returns>
-        private byte fetchByte(ushort address)
+        /// <returns>The Byte in the requested address</returns>
+        private Byte fetchByte(Word address)
         {
             _cycles++;
             if (address > 0x100) _cycles++;
@@ -253,7 +258,7 @@ namespace Emulators.MOS6502
         /// Retrieve the X register and increment PC
         /// </summary>
         /// <returns>The current X register</returns>
-        private byte fetchX()
+        private Byte fetchX()
         {
             _cycles++;
             return X;
@@ -263,7 +268,7 @@ namespace Emulators.MOS6502
         /// Retrieve the Y register and increment PC
         /// </summary>
         /// <returns>The current Y register</returns>
-        private byte fetchY()
+        private Byte fetchY()
         {
             _cycles++;
             return Y;
@@ -274,7 +279,7 @@ namespace Emulators.MOS6502
         /// </summary>
         /// <param name="value">The value to return</param>
         /// <returns>The value passed in</returns>
-        private byte fetchRegister(byte value)
+        private Byte fetchRegister(Byte value)
         {
             _cycles++;
             return value;
@@ -282,100 +287,99 @@ namespace Emulators.MOS6502
 
 
         /// <summary>
-        /// Returns the next byte based on the current PC, and increments PC by one
+        /// Returns the next Byte based on the current PC, and increments PC by one
         /// </summary>
-        /// <returns>The next byte in memory</returns>
-        private byte fetchNextByte()
+        /// <returns>The next Byte in memory</returns>
+        private Byte fetchNextByte()
         {
             _cycles++;
-            return Memory[PC++];
+            return Memory[_pc++];
         }
 
         /// <summary>
-        /// Returns the 16 bit value based on the current PC swaps the bytes, and increments the PC by two
+        /// Returns the 16 bit value based on the current PC swaps the Bytes, and increments the PC by two
         /// </summary>
         /// <returns>The next word in memory</returns>
-        private ushort fetchNextWord()
+        private Word fetchNextWord()
         {
             _cycles++;
 #if BIGENDIAN
-                var byteA = Memory[PC++];
-                var byteB = Memory[PC++];
-                return swapBytes(byteA, byteB);
+                var ByteA = Memory[PC++];
+                var ByteB = Memory[PC++];
+                return swapBytes(ByteA, ByteB);
 #else
-            var value = BitConverter.ToUInt16(Memory, PC++);
-            PC++;
+            var value = BitConverter.ToUInt16(Memory, _pc++);
+            _pc++;
             return value;
 #endif
         }
 
+        int getBit(Byte b, int bitNumber)
+        {
+            return ((b >> bitNumber) & 0x01);
+        }
+
         /// <summary>
-        /// Swap the bytes around from little-endian to big-endian, or visa-versa
+        /// Swap the Bytes around from little-endian to big-endian, or visa-versa
         /// </summary>
-        /// <param name="byteA">The left most byte</param>
-        /// <param name="byteB">The right most byte</param>
+        /// <param name="ByteA">The left most Byte</param>
+        /// <param name="ByteB">The right most Byte</param>
         /// <returns></returns>
-        private ushort swapBytes(byte byteA, byte byteB)
+        private Word swapBytes(Byte ByteA, Byte ByteB)
         {
-            return ((ushort)(byteB << 8 | byteA));
+            return ((Word)(ByteB << 8 | ByteA));
         }
 
-        private void loadAccumulatorStatus()
+        private void setRegister(ref Byte register, byte value)
         {
-            Status.Zero = this.A == (byte)0x00;
+            Status.Negative = (sbyte)value < 0;
+            Status.Zero = value == 0;
+            register = value;
+        }
+
+        private void loadRegisterStatus(ref Byte register)
+        {
+            Status.Zero = register == (Byte)0x00;
+            Status.Negative = getBit(register, 7) == 1;
         }
 
         /// <summary>
-        /// Load the next byte into the register
+        /// Load the next Byte into the register
         /// </summary>
         /// <param name="action">The action that will take the value and apply it to the correct register</param>
-        private void loadRegisterImmediate(ref byte register)
+        private void loadRegisterImmediate(ref Byte register)
         {
-            register = fetchNextByte();
-            loadAccumulatorStatus();
+            setRegister(ref register, fetchNextByte());
         }
 
         /// <summary>
-        /// Load the value at the position in zero page memory < 256 bytes ino the correct register
+        /// Load the value at the position in zero page memory < 256 Bytes ino the correct register
         /// </summary>
         /// <param name="action">The action that will take the value and apply it to the correct register</param>
-        private void loadRegisterZeroPage(ref byte register)
+        private void loadRegisterZeroPage(ref Byte register)
         {
-            register = fetchByte(fetchNextByte());
-            loadAccumulatorStatus();
+            setRegister(ref register, fetchByte(fetchNextByte()));
         }
 
         /// <summary>
-        /// Load the value at the position in zero page memory < 256 bytes plus an offset ino the correct register
+        /// Load the value at the position in zero page memory < 256 Bytes plus an offset ino the correct register
         /// </summary>
         /// <param name="offset">The amount to offset from the zero page address</param>
         /// <param name="action">The action that will take the value and apply it to the correct register</param>
-        private void loadRegisterZeroPageOffset(byte offset, ref byte register)
+        private void loadRegisterZeroPageOffset(Byte offset, ref Byte register)
         {
-            register = fetchByte(Convert.ToByte(fetchNextByte() + fetchRegister(offset)));
-            loadAccumulatorStatus();
+            setRegister(ref register, fetchByte(Convert.ToByte(fetchNextByte() + fetchRegister(offset))));
         }
 
-        private void loadRegisterAbsolute(ref byte register)
+        private void loadRegisterAbsolute(ref Byte register)
         {
-            var address = fetchNextWord();
-            register = fetchByte(address);
-            loadAccumulatorStatus();
+            setRegister(ref register, fetchByte(fetchNextWord()));
         }
 
-        private void loadRegisterAbsoluteOffset(byte offset, ref byte register)
+        private void loadRegisterAbsoluteOffset(Byte offset, ref Byte register)
         {
             var address = fetchNextWord();
-            var value = fetchByte(Convert.ToUInt16(address + offset));
-            register = value;
-            loadAccumulatorStatus();
-            //var byteA = fetchNextByte();
-            //var byteB = fetchNextByte();
-            //var address = Convert.ToUInt16((byteB << 8 | byteA) + fetchRegister(offset));
-            ////if (address > 0x100) PC++; // > 255
-            //action(fetchByte(address));
-
-            //loadAccumulatorStatus();
+            setRegister(ref register, fetchByte(Convert.ToUInt16(address + offset)));
         }
 
         public void Dispose()

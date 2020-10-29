@@ -17,7 +17,7 @@ namespace Emulators.MOS6502.Tests
         public void Initialize()
         {
             _cpu = new CPU();
-            _originalPC = _cpu.PC;
+            _originalPC = _cpu.PC; ;
         }
 
         [TestCleanup]
@@ -27,13 +27,14 @@ namespace Emulators.MOS6502.Tests
         }
 
         [DataTestMethod]
-        [DataRow(InstructionSet.INS_LDA_I, (byte)0x10, (byte)0x10, (byte)0x10, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, false, false, false, false, false, false, DisplayName = "LDA_I Without Zero Bit")]
-        [DataRow(InstructionSet.INS_LDA_I, (byte)0x0, (byte)0x0, (byte)0, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, true, false, false, false, false, false, DisplayName = "LDA_I With Zero Bit")]
-        public void LoadA_Immediate(byte instruction, byte address, byte value, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
+        [DataRow(InstructionSet.INS_LDA_I, (byte)0x10, (byte)0x10, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, false, false, false, false, false, false, DisplayName = "LDA_I Without Zero Bit")]
+        [DataRow(InstructionSet.INS_LDA_I, (byte)0x0, (byte)0, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, true, false, false, false, false, false, DisplayName = "LDA_I With Zero Bit")]
+        [DataRow(InstructionSet.INS_LDA_I, (byte)0b10000001, (byte)129, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, false, false, false, false, false, true, DisplayName = "LDA_I With Negative Bit")]
+        public void LoadA_Immediate(byte instruction, byte address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
             bool z, bool i, bool d, bool b,
             bool o, bool n)
         {
-            var memory = new byte[] { instruction, value };
+            var memory = new byte[] { instruction, address };
             _cpu.Reset(memory);
             _cpu.Debug();
             _cpu.Start();
