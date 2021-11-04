@@ -4,19 +4,24 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Bson;
+using Emulators.Platform;
 
 namespace Emulators.MOS6502.Tests
 {
     [TestClass()]
     public class LDATests
     {
-        private CPU _cpu = null;
+        private IMainboard _mainboard = null;
+        private Processor _cpu = null;
         private ushort _originalPC;
 
         [TestInitialize]
         public void Initialize()
         {
-            _cpu = new CPU();
+            _mainboard = new Commodore64Board();
+            _cpu = (Processor)_mainboard.Processor;
             _originalPC = _cpu.PC; ;
         }
 
@@ -30,14 +35,14 @@ namespace Emulators.MOS6502.Tests
         [DataRow(InstructionSet.INS_LDA_I, (byte)0x10, (byte)0x10, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, false, false, false, false, false, false, DisplayName = "LDA_I Without Zero Bit")]
         [DataRow(InstructionSet.INS_LDA_I, (byte)0x0, (byte)0, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, true, false, false, false, false, false, DisplayName = "LDA_I With Zero Bit")]
         [DataRow(InstructionSet.INS_LDA_I, (byte)0b10000001, (byte)129, (byte)0, (byte)0, (byte)2, (ushort)2, (ushort)0, false, false, false, false, false, false, true, DisplayName = "LDA_I With Negative Bit")]
-        public void LoadA_Immediate(byte instruction, byte address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
+        public async Task LoadA_Immediate(byte instruction, byte address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
             bool z, bool i, bool d, bool b,
             bool o, bool n)
         {
             var memory = new byte[] { instruction, address };
-            _cpu.Reset(memory);
-            _cpu.Debug();
-            _cpu.Start();
+            _mainboard.Reset(memory);
+            await _cpu.DebugAsync();
+            await _cpu.StartAsync();
 
             while (!_cpu.IsPaused) { };
 
@@ -47,7 +52,7 @@ namespace Emulators.MOS6502.Tests
         [DataTestMethod]
         [DataRow(InstructionSet.INS_LDA_ZP, (byte)0x10, (byte)0x01, (byte)0, (byte)0, (byte)3, (ushort)2, (ushort)0,  false, false, false, false, false, false, false, DisplayName = "LDA_ZP Without Zero Bit")]
         [DataRow(InstructionSet.INS_LDA_ZP, (byte)0x10, (byte)0, (byte)0, (byte)0, (byte)3, (ushort)2, (ushort)0, false, true, false, false, false, false, false, DisplayName = "LDA_ZP With Zero Bit")]
-        public void LoadA_Zero_Page(byte instruction, byte address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
+        public async Task LoadA_Zero_Page(byte instruction, byte address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
             bool z, bool i, bool d, bool b,
             bool o, bool n)
         {
@@ -58,9 +63,9 @@ namespace Emulators.MOS6502.Tests
             memory[0x101] = address;
             memory[address] = a;
 
-            _cpu.Reset(memory);
-            _cpu.Debug();
-            _cpu.Start();
+            _mainboard.Reset(memory);
+            await _cpu.DebugAsync();
+            await _cpu.StartAsync();
 
             while (!_cpu.IsPaused) { };
 
@@ -70,7 +75,7 @@ namespace Emulators.MOS6502.Tests
         [DataTestMethod]
         [DataRow(InstructionSet.INS_LDA_ZPX, (byte)0x10, (byte)0x01, (byte)0x01, (byte)0, (byte)4, (ushort)2, (ushort)0, false, false, false, false, false, false, false, DisplayName = "LDA_ZP Without Zero Bit")]
         [DataRow(InstructionSet.INS_LDA_ZPX, (byte)0x10, (byte)0x00, (byte)0x10, (byte)0, (byte)4, (ushort)2, (ushort)0, false, true, false, false, false, false, false, DisplayName = "LDA_ZP With Zero Bit")]
-        public void LoadA_Zero_Page_X(byte instruction, byte address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
+        public async Task LoadA_Zero_Page_X(byte instruction, byte address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
             bool z, bool i, bool d, bool b,
             bool o, bool n)
         {
@@ -80,12 +85,12 @@ namespace Emulators.MOS6502.Tests
             memory[0x100] = instruction;
             memory[0x101] = address;
 
-            _cpu.Reset(memory);
-            _cpu.Debug();
+            _mainboard.Reset(memory);
+            await _cpu.DebugAsync();
 
             _cpu.X = x;
 
-            _cpu.Start();
+            await _cpu.StartAsync();
 
             while (!_cpu.IsPaused) { };
 
@@ -95,7 +100,7 @@ namespace Emulators.MOS6502.Tests
         [DataTestMethod]
         [DataRow(InstructionSet.INS_LDA_A, (byte)0x10, (byte)0x01, (byte)0x01, (byte)0, (byte)0, (byte)4, (ushort)3, (ushort)0, false, false, false, false, false, false, false, DisplayName = "LDA_ZP Without Zero Bit")]
         [DataRow(InstructionSet.INS_LDA_A, (byte)0x10, (byte)0x02, (byte)0x00, (byte)0, (byte)0, (byte)4, (ushort)3, (ushort)0, false, true, false, false, false, false, false, DisplayName = "LDA_ZP With Zero Bit")]
-        public void LoadA_Absolute(byte instruction, byte addressLow, byte addressHigh, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
+        public async Task LoadA_Absolute(byte instruction, byte addressLow, byte addressHigh, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
             bool z, bool i, bool d, bool b,
             bool o, bool n)
         {
@@ -106,11 +111,10 @@ namespace Emulators.MOS6502.Tests
             memory[0x101] = addressLow;
             memory[0x102] = addressHigh;
 
-            _cpu.Reset(memory);
+            _mainboard.Reset(memory);
             _cpu.X = x;
-            _cpu.Debug();
-
-            _cpu.Start();
+            await _cpu.DebugAsync();
+            await _cpu.StartAsync();
 
             while (!_cpu.IsPaused) { };
 
@@ -118,9 +122,9 @@ namespace Emulators.MOS6502.Tests
         }
 
         [DataTestMethod]
-        [DataRow(InstructionSet.INS_LDA_AX, (byte)0x10, (byte)0x01, (byte)0x01, (byte)0, (byte)0, (byte)4, (ushort)3, (ushort)0, false, false, false, false, false, false, false, DisplayName = "LDA_ZP Without Zero Bit")]
-        [DataRow(InstructionSet.INS_LDA_AX, (byte)0x10, (byte)0x02, (byte)0x00, (byte)0, (byte)0, (byte)4, (ushort)3, (ushort)0, false, true, false, false, false, false, false, DisplayName = "LDA_ZP With Zero Bit")]
-        public void LoadA_AbsoluteOffsetX(byte instruction, byte addressLow, byte addressHigh, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
+        [DataRow(InstructionSet.INS_LDA_AX, (ushort)0x0110, (byte)0, (byte)4, (byte)0, (byte)4, (ushort)0, (ushort)0, false, false, false, false, false, false, false, DisplayName = "INS_LDA_AX Without Zero Bit")]
+        //[DataRow(InstructionSet.INS_LDA_AX, (ushort)0x0002, (byte)0, (byte)4, (byte)0, (ushort)4, (ushort)3, (ushort)0, false, true, false, false, false, false, false, DisplayName = "INS_LDA_AX With Zero Bit")]
+        public async Task LoadA_AbsoluteOffsetX(byte instruction, ushort address, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
             bool z, bool i, bool d, bool b,
             bool o, bool n)
         {
@@ -128,19 +132,44 @@ namespace Emulators.MOS6502.Tests
             // memory[]
             memory[0x0110] = 0x01;
             memory[0x100] = instruction;
-            memory[0x101] = addressLow;
-            memory[0x102] = addressHigh;
+            memory[0x101] = BitConverter.GetBytes(address)[0];
+            memory[0x102] = BitConverter.GetBytes(address)[1];
 
-            _cpu.Reset(memory);
+            _mainboard.Reset(memory);
             _cpu.X = x;
-            _cpu.Debug();
+            await _cpu.DebugAsync();
 
-            _cpu.Start();
+            await _cpu.StartAsync();
 
             while (!_cpu.IsPaused) { };
 
             Load_A_Asserts(a, x, y, cycles, pc, sp, c, z, i, d, b, o, n);
         }
+
+        //[DataTestMethod]
+        //[DataRow(InstructionSet.INS_LDA_AY, (byte)0x10, (byte)0x01, (byte)0x01, (byte)0, (byte)0, (byte)4, (ushort)3, (ushort)0, false, false, false, false, false, false, false, DisplayName = "INS_LDA_AY Without Zero Bit")]
+        //[DataRow(InstructionSet.INS_LDA_AY, (byte)0x10, (byte)0x02, (byte)0x00, (byte)0, (byte)0, (byte)4, (ushort)3, (ushort)0, false, true, false, false, false, false, false, DisplayName = "INS_LDA_AY With Zero Bit")]
+        //public void LoadA_AbsoluteOffsetY(byte instruction, byte addressLow, byte addressHigh, byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c,
+        //    bool z, bool i, bool d, bool b,
+        //    bool o, bool n)
+        //{
+        //    var memory = new byte[0xffff];
+        //    // memory[]
+        //    memory[0x0110] = 0x01;
+        //    memory[0x100] = instruction;
+        //    memory[0x101] = addressLow;
+        //    memory[0x102] = addressHigh;
+
+        //    _cpu.Reset(memory);
+        //    _cpu.Y = y;
+        //    _cpu.Debug();
+
+        //    _cpu.Start();
+
+        //    while (!_cpu.IsPaused) { };
+
+        //    Load_A_Asserts(a, x, y, cycles, pc, sp, c, z, i, d, b, o, n);
+        //}
 
         private void Load_A_Asserts(byte a, byte x, byte y, byte cycles, ushort pc, ushort sp, bool c, bool z, bool i, bool d, bool b, bool o, bool n)
         {

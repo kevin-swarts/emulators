@@ -2,11 +2,10 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <RootNamespace>Emulators.MOS6502</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Emulators.Platform\Emulators.Platform.csproj" />
+    <Folder Include="New\" />
   </ItemGroup>
 
 </Project>
